@@ -1,0 +1,44 @@
+# Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# .NET
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+
+# VS Code
+.vscode/settings.json
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# SQLite temp files
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/settings.local.json
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Uploaded files
+backend/API/uploads/
+
+# Environment
+.env
+.env.local
