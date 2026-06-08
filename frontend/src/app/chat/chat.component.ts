@@ -732,14 +732,21 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.messages.update(msgs => [...msgs, streamingMessage]);
 
     let sources: SourceRef[] = [];
+    let lastProcessedIndex = 0;
 
     request.onprogress = () => {
       if (request.readyState >= 3) {
         const responseText = request.responseText;
-        const lines = responseText.split('\n\n').filter(line => line.startsWith('data: '));
 
-        for (const line of lines) {
-          const data = line.replace('data: ', '');
+        while (lastProcessedIndex < responseText.length) {
+          const delimIndex = responseText.indexOf('\n\n', lastProcessedIndex);
+          if (delimIndex === -1) break;
+
+          const rawLine = responseText.substring(lastProcessedIndex, delimIndex);
+          lastProcessedIndex = delimIndex + 2;
+
+          if (!rawLine.startsWith('data: ')) continue;
+          const data = rawLine.substring(6);
           if (data === '[DONE]') continue;
           if (data.startsWith('{"error"')) continue;
 
@@ -806,7 +813,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   }
 
   formatTime(dateString: string): string {
-    const date = new Date(dateString);
+    const date = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
