@@ -13,6 +13,64 @@ Document-grounded AI chat application. Upload PDFs, ask questions, and get answe
 
 This project explores how Retrieval Augmented Generation (RAG) can improve AI responses by grounding answers in uploaded documents instead of relying solely on model knowledge.
 
+## Technical Challenges
+
+### Building Semantic Search Without a Vector Database
+
+Challenge:
+SQLite does not provide native vector search.
+
+Solution:
+Stored document embeddings in SQLite and implemented cosine similarity ranking in the application layer to retrieve the top 5 most relevant chunks for each query.
+
+### Selecting a Reliable PDF Text Extraction Strategy
+
+Challenge:
+PdfSharpCore returned PDF operators instead of clean text, making extracted content unusable for embeddings.
+
+Solution:
+Replaced PdfSharpCore with PdfPig, which provides reliable text extraction for text-based PDF documents.
+
+### Preventing Context Duplication in LLM Prompts
+
+`BuildMessages` used `TakeLast(11)` which already includes the last user message, then added it again separately. The prompt sent to Ollama had a duplicate user message, causing repeated response fragments.
+
+Fixed by skipping the last item before adding the current message:
+```csharp
+var priorMessages = allPrior.Take(allPrior.Count - 1); // skip duplicate
+```
+
+### Handling Incremental Streaming Responses
+
+`XMLHttpRequest.responseText` accumulates all received data. The old frontend code split the entire response on every `onprogress` call and reprocessed every line — including already-processed ones. Result: `JSONJSON WebJSON Web Token...`.
+
+Fixed by tracking position and only parsing new data:
+```typescript
+let lastProcessedIndex = 0;
+while (lastProcessedIndex < responseText.length) {
+  const delimIndex = responseText.indexOf('\n\n', lastProcessedIndex);
+  if (delimIndex === -1) break;
+  lastProcessedIndex = delimIndex + 2; // advance past this event
+}
+```
+
+### Timestamp Jumps After Streaming
+
+Streaming messages were created with `new Date()` (local time). After completion, `loadMessages` returned timestamps from `DateTime.UtcNow` (UTC). The clock jumped hours on completion.
+
+Fixed by treating all datetime strings as UTC:
+```typescript
+const date = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+```
+
+### Constructing Relevant Context for RAG
+
+Challenge:
+Large documents contain many chunks, but only a small subset should be sent to the LLM.
+
+Solution:
+Implemented embedding-based retrieval and selected the top 5 most relevant chunks before injecting them into the prompt, reducing irrelevant context and improving answer quality.
+
 ## Core Features
 
 - User authentication and authorization
@@ -32,16 +90,6 @@ This project explores how Retrieval Augmented Generation (RAG) can improve AI re
 - Applied Clean Architecture across frontend and backend
 - Integrated local LLM inference using Ollama
 
-## Features
-
-- **RAG-Powered Chat** — Answers are generated from uploaded documents, not general model knowledge
-- **PDF Upload & Processing** — Automatic text extraction, cleaning, chunking, and embedding
-- **Semantic Search** — Cosine similarity search across document chunks
-- **Streaming Responses** — Real-time SSE streaming from Ollama
-- **Chat Sessions** — Create, manage, and continue conversations
-- **Document Management** — Upload, preview, and delete PDFs
-- **Authentication** — JWT-based auth with access + refresh tokens
-
 ## Tech Stack
 
 | Layer | Technology |
@@ -52,16 +100,15 @@ This project explores how Retrieval Augmented Generation (RAG) can improve AI re
 | AI | Ollama + llama3.2 + local embeddings |
 | PDF | PdfPig (text extraction) |
 
-## Highlights
+## Features
 
-- Clean Architecture
-- JWT Authentication with Refresh Tokens
-- RAG Pipeline
-- Semantic Search
-- SSE Streaming
-- Angular Signals
-- Dark Mode
-- PDF Processing Pipeline
+- **RAG-Powered Chat** — Answers are generated from uploaded documents, not general model knowledge
+- **PDF Upload & Processing** — Automatic text extraction, cleaning, chunking, and embedding
+- **Semantic Search** — Cosine similarity search across document chunks
+- **Streaming Responses** — Real-time SSE streaming from Ollama
+- **Chat Sessions** — Create, manage, and continue conversations
+- **Document Management** — Upload, preview, and delete PDFs
+- **Authentication** — JWT-based auth with access + refresh tokens
 
 ## Prerequisites
 
@@ -201,10 +248,10 @@ User
 
 ```
 backend/
-├── API/              # Controllers, middleware
-├── Application/      # Services, DTOs, interfaces
-├── Domain/           # Entities, enums
-└── Infrastructure/  # DbContext, repositories
+├── API              # Controllers, middleware, endpoints
+├── Application      # Use cases, services, DTOs
+├── Domain           # Entities and business rules
+└── Infrastructure   # EF Core, repositories, external services
 
 frontend/src/app/
 ├── auth/             # Login, register
